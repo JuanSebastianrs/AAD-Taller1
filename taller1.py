@@ -312,3 +312,280 @@ print(f"""
   Se eligió K={K} por ser el estándar para balancear sesgo-varianza
   en la estimación del error de predicción.
 """)
+
+# =============================================================================
+# 5. PUNTO 4: AJUSTE FINAL CON LOS MEJORES λ (SOLO ENTRENAMIENTO)
+# =============================================================================
+print("\n" + "=" * 70)
+print("PUNTO 4 (cont.): AJUSTE FINAL CON λ ÓPTIMOS")
+print("=" * 70)
+print("(Ajuste sobre los 1000 datos de entrenamiento)")
+
+# ─────────────────────────────────────────────────────────────────
+# 5a. MODELO FINAL RIDGE
+# ─────────────────────────────────────────────────────────────────
+print(f"\n{'─' * 60}")
+print("5a) MODELO FINAL RIDGE")
+print("─" * 60)
+
+# ridge_final ya fue entrenado con ridge_best_alpha — no se re-entrena
+y_pred_ridge_train = ridge_final.predict(X_train_scaled)
+ecm_ridge_train    = mean_squared_error(y_train, y_pred_ridge_train)
+
+ridge_coef_series = pd.Series(
+    np.abs(ridge_final.coef_),
+    index=[f"Gen_{i+1}" for i in range(p)]
+)
+top10_ridge = ridge_coef_series.nlargest(10)
+
+print(f"  λ_r utilizado:         {ridge_best_alpha:.6f}")
+print(f"  ECM en entrenamiento:  {ecm_ridge_train:.6f}")
+print(f"  Coeficientes ≠ 0:      {n_nonzero_ridge} de {p}")
+print(f"\n  Top 10 genes con mayor |coeficiente| en Ridge:")
+print(f"  {'Gen':<12} {'|Coef|':>12}")
+print(f"  {'─'*12} {'─'*12}")
+for gen, coef in top10_ridge.items():
+    print(f"  {gen:<12} {coef:>12.6f}")
+
+# ─────────────────────────────────────────────────────────────────
+# 5b. MODELO FINAL LASSO
+# ─────────────────────────────────────────────────────────────────
+print(f"\n{'─' * 60}")
+print("5b) MODELO FINAL LASSO")
+print("─" * 60)
+
+# lasso_cv ya contiene el modelo ajustado — no se re-entrena
+y_pred_lasso_train = lasso_cv.predict(X_train_scaled)
+ecm_lasso_train    = mean_squared_error(y_train, y_pred_lasso_train)
+
+lasso_coef_series = pd.Series(
+    np.abs(lasso_cv.coef_),
+    index=[f"Gen_{i+1}" for i in range(p)]
+)
+top10_lasso = lasso_coef_series[lasso_coef_series > 1e-8].nlargest(10)
+
+print(f"  λ_l utilizado:         {lasso_best_alpha:.6f}")
+print(f"  ECM en entrenamiento:  {ecm_lasso_train:.6f}")
+print(f"  Genes seleccionados:   {n_nonzero_lasso} de {p}")
+print(f"\n  Top 10 genes con mayor |coeficiente| en Lasso:")
+print(f"  {'Gen':<12} {'|Coef|':>12}")
+print(f"  {'─'*12} {'─'*12}")
+for gen, coef in top10_lasso.items():
+    print(f"  {gen:<12} {coef:>12.6f}")
+
+# ─────────────────────────────────────────────────────────────────
+# 5c. RESUMEN
+# ─────────────────────────────────────────────────────────────────
+print(f"\n{'─' * 60}")
+print("RESUMEN PUNTO 4")
+print("─" * 60)
+print(f"{'Métrica':<25} {'Ridge':>12} {'Lasso':>12}")
+print(f"{'─'*25} {'─'*12} {'─'*12}")
+print(f"{'λ óptimo':<25} {ridge_best_alpha:>12.6f} {lasso_best_alpha:>12.6f}")
+print(f"{'ECM entrenamiento':<25} {ecm_ridge_train:>12.6f} {ecm_lasso_train:>12.6f}")
+print(f"{'Genes activos':<25} {n_nonzero_ridge:>12} {n_nonzero_lasso:>12}")
+
+# =============================================================================
+# 6. PUNTO 5: SELECCIÓN DEL MEJOR MODELO (ECM EN DATOS DE PRUEBA)
+# =============================================================================
+print("\n" + "=" * 70)
+print("PUNTO 4: SELECCIÓN DEL MEJOR MODELO")
+print("=" * 70)
+print("(Evaluación sobre los 200 datos de prueba — uso único)")
+
+# ─────────────────────────────────────────────────────────────────
+# 6a. PREDICCIONES EN PRUEBA
+# ─────────────────────────────────────────────────────────────────
+y_pred_ridge_test = ridge_final.predict(X_test_scaled)
+y_pred_lasso_test = lasso_cv.predict(X_test_scaled)
+
+ecm_ridge_test = mean_squared_error(y_test, y_pred_ridge_test)
+ecm_lasso_test = mean_squared_error(y_test, y_pred_lasso_test)
+
+print(f"\n{'─' * 60}")
+print("ECM EN DATOS DE PRUEBA")
+print("─" * 60)
+print(f"  ECM Ridge:  {ecm_ridge_test:.6f}")
+print(f"  ECM Lasso:  {ecm_lasso_test:.6f}")
+
+# ─────────────────────────────────────────────────────────────────
+# 6b. SELECCIÓN
+# ─────────────────────────────────────────────────────────────────
+if ecm_ridge_test < ecm_lasso_test:
+    mejor_modelo   = "Ridge"
+    peor_modelo   = "Lasso"
+    ecm_mejor      = ecm_ridge_test
+    ecm_peor       = ecm_lasso_test
+    genes_mejor     = n_nonzero_ridge
+    genes_peor      = n_nonzero_lasso
+    diferencia_gen  = n_nonzero_ridge / n_nonzero_lasso * 100
+else:
+    mejor_modelo   = "Lasso"
+    peor_modelo   = "Ridge"
+    ecm_mejor      = ecm_lasso_test
+    ecm_peor       = ecm_ridge_test
+    genes_mejor     = n_nonzero_lasso
+    genes_peor      = n_nonzero_ridge
+    diferencia_gen  = n_nonzero_lasso / n_nonzero_ridge  * 100
+
+diferencia_pct = abs(ecm_ridge_test - ecm_lasso_test) / ecm_peor * 100
+
+print(f"\n  → Modelo seleccionado: {mejor_modelo}")
+print(f"  → Diferencia en ECM:   {diferencia_pct:.2f}%")
+print(f"  → Diferencia en número de genes:   {diferencia_gen:.2f}%")
+
+# ─────────────────────────────────────────────────────────────────
+# 6c. RESUMEN FINAL
+# ─────────────────────────────────────────────────────────────────
+print(f"\n{'─' * 60}")
+print("RESUMEN FINAL PUNTO 4")
+print("─" * 60)
+print(f"{'Métrica':<25} {'Ridge':>12} {'Lasso':>12}")
+print(f"{'─'*25} {'─'*12} {'─'*12}")
+print(f"{'λ óptimo':<25} {ridge_best_alpha:>12.6f} {lasso_best_alpha:>12.6f}")
+print(f"{'ECM entrenamiento':<25} {ecm_ridge_train:>12.6f} {ecm_lasso_train:>12.6f}")
+print(f"{'ECM prueba':<25} {ecm_ridge_test:>12.6f} {ecm_lasso_test:>12.6f}")
+print(f"{'Genes activos':<25} {n_nonzero_ridge:>12} {n_nonzero_lasso:>12}")
+
+print(f"""
+CONCLUSIÓN PUNTO 4:
+  • Modelo elegido: {mejor_modelo} (ECM = {ecm_mejor:.6f})
+
+  • Sobre los 200 datos de prueba, {mejor_modelo} redujo un {diferencia_pct:.2f}% el ECM usando solo el {diferencia_gen:.2f}% de los genes que {peor_modelo}.
+
+""")
+
+# =============================================================================
+# 7. punto 6: REAJUSTE CON LOS 1200 DATOS (PENDIENTE) 
+# =============================================================================
+
+# =============================================================================
+# 8. punto 7: TRAZAS DE COEFICIENTES (PENDIENTE)
+# =============================================================================
+
+
+
+
+# =============================================================================
+# GENERACIÓN AUTOMÁTICA DEL README 
+# =============================================================================
+
+readme_content = f"""# Taller 1 — Regresión Regularizada en Datos Genómicos
+
+**Asignatura:** Análisis Avanzado de datos, por el profesor Andrés Nicolás López.
+**Estudiantes:** Stefany Mojica, Sara Castillejo y Juan Sebastián Rodríguez.
+*Maestría en Matemáticas Avanzadas y Ciencias de la Computación*
+*Universidad del Rosario*
+
+## Problema
+
+El conjunto de datos `taller1.txt` contiene el perfil genómico de **1200 líneas celulares**
+como modelos de cáncer. Se busca determinar cuáles de los **5000 genes** son relevantes
+para predecir la efectividad del tratamiento anticáncer (variable continua).
+
+**NOTA:** para correr correctamente este código, se debe agregar manualmente el archivo `taller1.txt` al clonar el repositorio. Dejamos aquí debajo un resumen solo con los resultados para una revisión rápida, pero en el archivo .py está el análisis completo.
+
+---
+
+## Punto 1 — Multicolinealidad
+
+**¿Hay multicolinealidad en los datos?**
+
+Sí. Las evidencias son:
+
+| Indicador | Valor | Interpretación |
+|---|---|---|
+| Dimensionalidad | p={p} >> n={n} | X'X no es invertible |
+| Rango de X | {rango} de {p} | {p - rango} dependencias lineales exactas |
+| Número de condición | {num_cond:.2f} | >> 30, multicolinealidad severa |
+| Componentes para 90% varianza | {n_comp_90} de {p} | Alta redundancia entre genes |
+
+![Multicolinealidad](punto1_multicolinealidad.png)
+
+---
+
+## Punto 2 — Partición de datos 
+
+| Conjunto | Observaciones |
+|---|---|
+| Entrenamiento | 1000 |
+| Prueba | 200 |
+| **Total** | **1200** |
+
+- Semilla utilizada: `{SEED}`
+
+---
+
+## Punto 3 — Selección de λ por validación cruzada
+
+Método: **{K}-Fold Cross-Validation** sobre los 1000 datos de entrenamiento.
+
+| Método | λ óptimo | ECM (CV) | Genes activos |
+|---|---|---|---|
+| Ridge | {ridge_best_alpha:.6f} | {ridge_best_mse:.6f} | {n_nonzero_ridge} |
+| Lasso | {lasso_best_alpha:.6f} | {lasso_best_mse:.6f} | {n_nonzero_lasso} |
+
+![ECM vs Lambda](punto3_ridge_lasso_cv.png)
+
+---
+
+## Punto 4 — Ajuste con λ óptimos
+
+Modelos ajustados sobre los **1000 datos de entrenamiento**.
+
+| Métrica | Ridge | Lasso |
+|---|---|---|
+| λ óptimo | {ridge_best_alpha:.6f} | {lasso_best_alpha:.6f} |
+| ECM entrenamiento | {ecm_ridge_train:.6f} | {ecm_lasso_train:.6f} |
+| Genes activos | {n_nonzero_ridge} | {n_nonzero_lasso} |
+
+---
+
+## Punto 5 — Selección del mejor modelo
+
+Criterio: **ECM sobre los 200 datos de prueba** (uso único).
+
+| Métrica | Ridge | Lasso |
+|---|---|---|
+| ECM prueba | {ecm_ridge_test:.6f} | {ecm_lasso_test:.6f} |
+| Genes activos | {n_nonzero_ridge} | {n_nonzero_lasso} |
+
+**Modelo seleccionado: {mejor_modelo}**
+- Redujo el ECM en un **{diferencia_pct:.2f}%** respecto a {peor_modelo}.
+- Utilizó solo el **{diferencia_gen:.2f}%** de los genes que usa {peor_modelo}.
+
+---
+
+## Punto 6 — Reajuste con los 1200 datos *(pendiente)*
+
+> Sección por completar.
+
+---
+
+## Punto 7 — Trazas de coeficientes *(pendiente)*
+
+> Sección por completar.
+
+---
+
+## Punto 8 — Conclusiones generales
+
+> Sección por completar.
+
+---
+
+## Reproducibilidad
+```bash
+pip install -r requirements.txt
+python taller1.py
+```
+
+**Semilla global:** `{SEED}`
+"""
+
+with open("README.md", "w", encoding="utf-8") as f:
+    f.write(readme_content)
+
+print("\n" + "=" * 70)
+print("README.md generado exitosamente")
+print("=" * 70)
