@@ -1,0 +1,13 @@
+# Datos
+taller1.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
