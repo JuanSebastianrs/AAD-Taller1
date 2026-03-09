@@ -118,7 +118,6 @@ El estudio buscaba identificar cuáles de los 5000 genes son relevantes para pre
 Al reajustar el modelo Lasso con los 1200 datos completos, se seleccionaron 96 genes relevantes de los 5000 disponibles. Las trazas confirman que el λ óptimo logra un equilibrio ideal entre precisión y simplicidad: los genes que resisten la penalización son los biomarcadores más determinantes para el tratamiento.
 
 En conclusión, Lasso demostró ser una gran herramienta para esté problema de alta dimensionalidad.
-
 ---
 
 ## Reproducibilidad

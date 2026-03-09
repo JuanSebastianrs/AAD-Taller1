@@ -717,8 +717,11 @@ Se graficaron las trazas de los coeficientes del modelo Lasso en función de λ 
 
 ## Punto 8 — Conclusiones generales
 
-El estudio buscaba identificar cuáles de los 5000 genes son relevantes para predecir la efectividad de un tratamiento anticáncer en 1200 líneas celulares. Dado que p >> n, se confirmó multicolinealidad perfecta, lo que justificó el uso de métodos regularizados. Se compararon Ridge y Lasso mediante validación cruzada 10-fold sobre 1000 datos de entrenamiento, encontrando que Lasso (λ = {lasso_best_alpha:.6f}) superó significativamente a Ridge al reducir el ECM de prueba en un {diferencia_pct:.2f}% mientras seleccionaba solo {n_nonzero_lasso} genes frente a los {p} que retiene Ridge. Al reajustar el modelo Lasso con los 1200 datos completos, se seleccionaron {n_nonzero_full} genes relevantes de los {p} disponibles. Las trazas de coeficientes confirmaron que el λ óptimo balancea adecuadamente ajuste y parsimonia: los genes que mantienen coeficientes no nulos bajo penalizaciones altas representan los biomarcadores más robustamente asociados a la respuesta terapéutica. En conclusión, Lasso demostró ser la herramienta idónea para este problema de alta dimensionalidad, al ofrecer simultáneamente un modelo predictivo preciso y una selección interpretable de genes candidatos que podrían guiar futuras investigaciones en oncología personalizada.
+El estudio buscaba identificar cuáles de los 5000 genes son relevantes para predecir la efectividad de un tratamiento anticáncer en 1200 líneas celulares. Dado que p > n, se confirmó multicolinealidad perfecta, lo que justificó el uso de métodos regularizados. Se compararon Ridge y Lasso mediante validación cruzada 10-fold sobre 1000 datos de entrenamiento, encontrando que Lasso (λ = 0.070548) superó significativamente a Ridge al reducir el ECM de prueba en un 91.78% mientras seleccionaba solo 117 genes frente a los 5000 que retiene Ridge. 
 
+Al reajustar el modelo Lasso con los 1200 datos completos, se seleccionaron 96 genes relevantes de los 5000 disponibles. Las trazas confirman que el λ óptimo logra un equilibrio ideal entre precisión y simplicidad: los genes que resisten la penalización son los biomarcadores más determinantes para el tratamiento.
+
+En conclusión, Lasso demostró ser una gran herramienta para esté problema de alta dimensionalidad.
 ---
 
 ## Reproducibilidad
