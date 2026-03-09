@@ -456,12 +456,144 @@ CONCLUSIÓN PUNTO 4:
 """)
 
 # =============================================================================
-# 7. punto 6: REAJUSTE CON LOS 1200 DATOS (PENDIENTE) 
+# 7. PUNTO 6: REAJUSTE CON LOS 1200 DATOS (LASSO)
 # =============================================================================
+print("\n" + "=" * 70)
+print("PUNTO 6: REAJUSTE DEL MODELO LASSO CON LOS 1200 DATOS")
+print("=" * 70)
+print("(Usando el λ estimado y el modelo seleccionado en el Punto 5: Lasso)")
+
+from sklearn.linear_model import Lasso
+
+# Estandarizar TODOS los 1200 datos
+scaler_full = StandardScaler()
+X_full_scaled = scaler_full.fit_transform(X)
+
+lasso_full = Lasso(
+    alpha=lasso_best_alpha,
+    max_iter=10000,
+    tol=1e-4,
+    random_state=SEED
+)
+lasso_full.fit(X_full_scaled, y)
+
+y_pred_full = lasso_full.predict(X_full_scaled)
+ecm_full = mean_squared_error(y, y_pred_full)
+n_nonzero_full = np.sum(np.abs(lasso_full.coef_) > 1e-8)
+
+lasso_full_coef_series = pd.Series(
+    np.abs(lasso_full.coef_),
+    index=[f"Gen_{i+1}" for i in range(p)]
+)
+top10_full = lasso_full_coef_series[lasso_full_coef_series > 1e-8].nlargest(10)
+
+print(f"\n  λ_l utilizado:         {lasso_best_alpha:.6f}")
+print(f"  Datos utilizados:      {X.shape[0]} (todos)")
+print(f"  ECM en ajuste:         {ecm_full:.6f}")
+print(f"  Genes seleccionados:   {n_nonzero_full} de {p}")
+print(f"  Genes descartados:     {p - n_nonzero_full} de {p}")
+
+print(f"\n  Top 10 genes con mayor |coeficiente| en Lasso (1200 datos):")
+print(f"  {'Gen':<12} {'|Coef|':>12}")
+print(f"  {'─'*12} {'─'*12}")
+for gen, coef in top10_full.items():
+    print(f"  {gen:<12} {coef:>12.6f}")
+
+
+genes_seleccionados = lasso_full_coef_series[lasso_full_coef_series > 1e-8].sort_values(ascending=False)
+print(f"\n  Todos los {n_nonzero_full} genes seleccionados están disponibles en el modelo.")
+
+print(f"\n{'─' * 60}")
+print("CONCLUSIÓN PUNTO 6:")
+print("─" * 60)
+print(f"""
+  Al reajustar Lasso con λ = {lasso_best_alpha:.6f} sobre los 1200 datos:
+  - Se seleccionaron {n_nonzero_full} genes de {p} ({n_nonzero_full/p*100:.2f}%).
+  - El ECM de ajuste fue {ecm_full:.6f}.
+  - Al usar todos los datos, el modelo aprovecha más información,
+    lo que puede mejorar la estabilidad de los coeficientes estimados.
+""")
 
 # =============================================================================
-# 8. punto 7: TRAZAS DE COEFICIENTES (PENDIENTE)
+# 8. PUNTO 7: TRAZAS DE COEFICIENTES 
 # =============================================================================
+print("\n" + "=" * 70)
+print("PUNTO 7: TRAZAS DE COEFICIENTES EN FUNCIÓN DE LA PENALIZACIÓN")
+print("=" * 70)
+print("(Modelo Lasso ajustado en el Punto 6 con los 1200 datos)")
+
+alphas_path = np.logspace(-4, 2, 200)
+
+# Calcular los coeficientes para cada λ
+coefs_path = []
+n_nonzero_path = []
+for alpha_val in alphas_path:
+    lasso_temp = Lasso(alpha=alpha_val, max_iter=10000, tol=1e-4, random_state=SEED)
+    lasso_temp.fit(X_full_scaled, y)
+    coefs_path.append(lasso_temp.coef_.copy())
+    n_nonzero_path.append(np.sum(np.abs(lasso_temp.coef_) > 1e-8))
+
+coefs_path = np.array(coefs_path)  
+n_nonzero_path = np.array(n_nonzero_path)
+
+# ─── Gráfico 1: Trazas de coeficientes ───
+fig, axes = plt.subplots(2, 1, figsize=(14, 12))
+
+ever_nonzero = np.any(np.abs(coefs_path) > 1e-8, axis=0)
+n_ever = np.sum(ever_nonzero)
+print(f"\n  Genes con coeficiente ≠ 0 en al menos un λ: {n_ever}")
+
+for j in range(p):
+    if ever_nonzero[j]:
+        axes[0].plot(alphas_path, coefs_path[:, j], linewidth=0.7, alpha=0.6)
+
+axes[0].axvline(x=lasso_best_alpha, color="red", linestyle="--", linewidth=2,
+                label=f"λ óptimo = {lasso_best_alpha:.6f}")
+axes[0].set_xscale("log")
+axes[0].set_xlabel("λ (penalización)", fontsize=13)
+axes[0].set_ylabel("Valor del coeficiente", fontsize=13)
+axes[0].set_title("Trazas de coeficientes Lasso vs λ\n(todos los genes seleccionados en algún λ)",
+                   fontsize=14)
+axes[0].legend(fontsize=11, loc="upper right")
+axes[0].grid(True, alpha=0.3)
+
+# ─── Gráfico 2: Número de coeficientes no nulos vs λ ───
+axes[1].plot(alphas_path, n_nonzero_path, color="darkorange", linewidth=2)
+axes[1].axvline(x=lasso_best_alpha, color="red", linestyle="--", linewidth=2,
+                label=f"λ óptimo = {lasso_best_alpha:.6f}\n({n_nonzero_full} genes)")
+axes[1].set_xscale("log")
+axes[1].set_xlabel("λ (penalización)", fontsize=13)
+axes[1].set_ylabel("Número de coeficientes ≠ 0", fontsize=13)
+axes[1].set_title("Número de genes seleccionados vs λ", fontsize=14)
+axes[1].legend(fontsize=11)
+axes[1].grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.savefig("punto7_trazas_coeficientes.png", dpi=150, bbox_inches="tight")
+plt.close()
+
+print(f"  Gráfico guardado: punto7_trazas_coeficientes.png")
+print(f"\n  En λ óptimo ({lasso_best_alpha:.6f}): {n_nonzero_full} genes seleccionados")
+print(f"  En λ mínimo ({alphas_path[0]:.6f}):  {n_nonzero_path[0]} genes con coef ≠ 0")
+print(f"  En λ máximo ({alphas_path[-1]:.2f}):   {n_nonzero_path[-1]} genes con coef ≠ 0")
+
+print(f"\n{'─' * 60}")
+print("CONCLUSIÓN PUNTO 7:")
+print("─" * 60)
+print(f"""
+  Las trazas muestran que a medida que λ aumenta, los coeficientes
+  se reducen progresivamente hacia cero (efecto de regularización L1).
+  
+  - Con λ muy pequeño, muchos genes tienen coeficientes no nulos,
+    resultando en un modelo complejo con riesgo de sobreajuste.
+  - Con λ muy grande, todos los coeficientes se anulan (modelo nulo).
+  - En el λ óptimo = {lasso_best_alpha:.6f}, Lasso selecciona {n_nonzero_full} genes,
+    balanceando ajuste y parsimonia.
+  
+  Los genes que mantienen coeficientes no nulos con penalizaciones
+  altas son los predictores más robustamente asociados con la
+  respuesta al tratamiento anticáncer.
+""")
 
 
 
@@ -556,21 +688,36 @@ Criterio: **ECM sobre los 200 datos de prueba** (uso único).
 
 ---
 
-## Punto 6 — Reajuste con los 1200 datos *(pendiente)*
+## Punto 6 — Reajuste con los 1200 datos
 
-> Sección por completar.
+Modelo **Lasso** reajustado sobre las **1200 observaciones** con λ = {lasso_best_alpha:.6f}.
+
+| Métrica | Valor |
+|---|---|
+| λ utilizado | {lasso_best_alpha:.6f} |
+| Datos usados | {X.shape[0]} |
+| ECM de ajuste | {ecm_full:.6f} |
+| Genes seleccionados | {n_nonzero_full} de {p} |
+| Genes descartados | {p - n_nonzero_full} de {p} |
 
 ---
 
-## Punto 7 — Trazas de coeficientes *(pendiente)*
+## Punto 7 — Trazas de coeficientes
 
-> Sección por completar.
+Se graficaron las trazas de los coeficientes del modelo Lasso en función de λ para los 1200 datos.
+
+![Trazas de coeficientes](punto7_trazas_coeficientes.png)
+
+**Observaciones:**
+- A medida que λ aumenta, los coeficientes se reducen progresivamente hacia cero (regularización L1).
+- Con λ muy pequeño se obtiene un modelo complejo; con λ muy grande, un modelo nulo.
+- En λ óptimo = {lasso_best_alpha:.6f}, se seleccionan {n_nonzero_full} genes que balancean ajuste y parsimonia.
 
 ---
 
 ## Punto 8 — Conclusiones generales
 
-> Sección por completar.
+El estudio buscaba identificar cuáles de los 5000 genes son relevantes para predecir la efectividad de un tratamiento anticáncer en 1200 líneas celulares. Dado que p >> n, se confirmó multicolinealidad perfecta, lo que justificó el uso de métodos regularizados. Se compararon Ridge y Lasso mediante validación cruzada 10-fold sobre 1000 datos de entrenamiento, encontrando que Lasso (λ = {lasso_best_alpha:.6f}) superó significativamente a Ridge al reducir el ECM de prueba en un {diferencia_pct:.2f}% mientras seleccionaba solo {n_nonzero_lasso} genes frente a los {p} que retiene Ridge. Al reajustar el modelo Lasso con los 1200 datos completos, se seleccionaron {n_nonzero_full} genes relevantes de los {p} disponibles. Las trazas de coeficientes confirmaron que el λ óptimo balancea adecuadamente ajuste y parsimonia: los genes que mantienen coeficientes no nulos bajo penalizaciones altas representan los biomarcadores más robustamente asociados a la respuesta terapéutica. En conclusión, Lasso demostró ser la herramienta idónea para este problema de alta dimensionalidad, al ofrecer simultáneamente un modelo predictivo preciso y una selección interpretable de genes candidatos que podrían guiar futuras investigaciones en oncología personalizada.
 
 ---
 
